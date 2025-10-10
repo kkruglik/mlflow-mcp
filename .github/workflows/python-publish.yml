@@ -12,12 +12,6 @@ on:
   release:
     types: [published]
   workflow_dispatch:
-    inputs:
-      image_tag:
-        description: "Image tag to deploy (default: latest)"
-        required: false
-        default: "latest"
-        type: string
 
 permissions:
   contents: read
