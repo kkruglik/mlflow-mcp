@@ -1,6 +1,6 @@
 [project]
 name = "mlflow-mcp"
-version = "0.1.4"
+version = "0.1.5"
 description = "A Model Context Protocol (MCP) server for MLflow - enables LLMs to interact with MLflow experiments, runs, metrics, and models"
 readme = "README.md"
 requires-python = ">=3.10"
