@@ -1,0 +1,54 @@
+[project]
+name = "mlflow-mcp"
+version = "0.1.0"
+description = "A Model Context Protocol (MCP) server for MLflow - enables LLMs to interact with MLflow experiments, runs, metrics, and models"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Kirill Kruglikov" }]
+keywords = [
+  "mlflow",
+  "mcp",
+  "model-context-protocol",
+  "llm",
+  "ai",
+  "machine-learning",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = ["mcp>=1.16.0", "mlflow>=3.4.0"]
+
+[project.urls]
+Homepage = "https://github.com/kirillkruglikov/mlflow-mcp"
+Repository = "https://github.com/kirillkruglikov/mlflow-mcp"
+Issues = "https://github.com/kirillkruglikov/mlflow-mcp/issues"
+
+[project.scripts]
+mlflow-mcp = "mlflow_mcp.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mlflow_mcp"]
+
+[tool.uv]
+dev-dependencies = [
+  "pytest>=7.0.0",
+  "pytest-asyncio>=0.21.0",
+  "black>=23.0.0",
+  "ruff>=0.1.0",
+]
