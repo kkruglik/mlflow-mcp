@@ -1,6 +1,6 @@
 [project]
 name = "mlflow-mcp"
-version = "0.1.0"
+version = "0.1.1"
 description = "A Model Context Protocol (MCP) server for MLflow - enables LLMs to interact with MLflow experiments, runs, metrics, and models"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -31,9 +31,9 @@ classifiers = [
 dependencies = ["mcp>=1.16.0", "mlflow>=3.4.0"]
 
 [project.urls]
-Homepage = "https://github.com/kirillkruglikov/mlflow-mcp"
-Repository = "https://github.com/kirillkruglikov/mlflow-mcp"
-Issues = "https://github.com/kirillkruglikov/mlflow-mcp/issues"
+Homepage = "https://github.com/kkruglik/mlflow-mcp"
+Repository = "https://github.com/kkruglik/mlflow-mcp"
+Issues = "https://github.com/kkruglik/mlflow-mcp/issues"
 
 [project.scripts]
 mlflow-mcp = "mlflow_mcp.__main__:main"
