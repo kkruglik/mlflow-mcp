@@ -99,25 +99,44 @@ def get_experiment_params(experiment_id: str) -> list[str]:
 
 
 @mcp.tool()
-def get_runs(experiment_id: str, limit: int = 10) -> list[dict]:
-    """Get runs for a specific experiment"""
-    logger.info(f"Fetching runs for experiment {experiment_id} (limit={limit})")
+def get_runs(experiment_id: str, limit: int = 5, include_details: bool = False) -> list[dict]:
+    """Get runs for a specific experiment. Set include_details=True to get full metrics/params (may be large!)"""
+    logger.info(f"Fetching runs for experiment {experiment_id} (limit={limit}, details={include_details})")
     try:
         client = mlflow.tracking.MlflowClient()
         runs = client.search_runs(experiment_ids=[experiment_id], max_results=limit)
         logger.info(f"Found {len(runs)} runs")
-        return [
-            {
-                "run_id": run.info.run_id,
-                "experiment_id": run.info.experiment_id,
-                "status": run.info.status,
-                "start_time": run.info.start_time,
-                "end_time": run.info.end_time,
-                "metrics": run.data.metrics,
-                "params": run.data.params,
-            }
-            for run in runs
-        ]
+
+        if include_details:
+            # Full data - use with caution!
+            return [
+                {
+                    "run_id": run.info.run_id,
+                    "experiment_id": run.info.experiment_id,
+                    "status": run.info.status,
+                    "start_time": run.info.start_time,
+                    "end_time": run.info.end_time,
+                    "metrics": run.data.metrics,
+                    "params": run.data.params,
+                }
+                for run in runs
+            ]
+        else:
+            # Lightweight - just summary
+            return [
+                {
+                    "run_id": run.info.run_id,
+                    "experiment_id": run.info.experiment_id,
+                    "status": run.info.status,
+                    "start_time": run.info.start_time,
+                    "end_time": run.info.end_time,
+                    "metrics_count": len(run.data.metrics),
+                    "params_count": len(run.data.params),
+                    "metric_keys": list(run.data.metrics.keys())[:10],  # First 10 only
+                    "param_keys": list(run.data.params.keys())[:10],    # First 10 only
+                }
+                for run in runs
+            ]
     except Exception as e:
         logger.error(f"Error fetching runs for experiment {experiment_id}: {e}")
         raise
@@ -149,8 +168,8 @@ def get_run(run_id: str) -> dict:
 
 
 @mcp.tool()
-def query_runs(experiment_id: str, query: str, limit: int = 10) -> list[dict]:
-    """Query runs using MLflow's filter syntax (e.g., 'metrics.accuracy > 0.9')"""
+def query_runs(experiment_id: str, query: str, limit: int = 5, include_details: bool = False) -> list[dict]:
+    """Query runs using MLflow's filter syntax (e.g., 'metrics.accuracy > 0.9'). Set include_details=True for full data."""
     logger.info(f"Querying runs in experiment {experiment_id} with filter: {query}")
     try:
         client = mlflow.tracking.MlflowClient()
@@ -158,16 +177,31 @@ def query_runs(experiment_id: str, query: str, limit: int = 10) -> list[dict]:
             experiment_ids=[experiment_id], filter_string=query, max_results=limit
         )
         logger.info(f"Query returned {len(runs)} runs")
-        return [
-            {
-                "run_id": run.info.run_id,
-                "experiment_id": run.info.experiment_id,
-                "status": run.info.status,
-                "metrics": run.data.metrics,
-                "params": run.data.params,
-            }
-            for run in runs
-        ]
+
+        if include_details:
+            return [
+                {
+                    "run_id": run.info.run_id,
+                    "experiment_id": run.info.experiment_id,
+                    "status": run.info.status,
+                    "metrics": run.data.metrics,
+                    "params": run.data.params,
+                }
+                for run in runs
+            ]
+        else:
+            return [
+                {
+                    "run_id": run.info.run_id,
+                    "experiment_id": run.info.experiment_id,
+                    "status": run.info.status,
+                    "metrics_count": len(run.data.metrics),
+                    "params_count": len(run.data.params),
+                    "metric_keys": list(run.data.metrics.keys())[:10],
+                    "param_keys": list(run.data.params.keys())[:10],
+                }
+                for run in runs
+            ]
     except Exception as e:
         logger.error(f"Error querying runs with filter '{query}': {e}")
         raise
@@ -253,14 +287,15 @@ def get_run_metric(run_id: str, metric_name: str) -> list[dict]:
 
 @mcp.tool()
 def get_best_run(experiment_id: str, metric: str, ascending: bool = False) -> dict:
-    """Get the best run by a specific metric (e.g., highest accuracy, lowest loss)"""
+    """Get the best run by a specific metric (e.g., highest accuracy, lowest loss). Works with metrics containing special characters like '/' (e.g., 'trading/total_profit')"""
     direction = "lowest" if ascending else "highest"
     logger.info(
         f"Finding best run by {metric} ({direction}) in experiment {experiment_id}"
     )
     try:
         client = mlflow.tracking.MlflowClient()
-        order_by = f"metrics.{metric} {'ASC' if ascending else 'DESC'}"
+        # Use backticks to escape metric names with special characters (/, -, etc.)
+        order_by = f"metrics.`{metric}` {'ASC' if ascending else 'DESC'}"
         runs = client.search_runs(
             experiment_ids=[experiment_id], order_by=[order_by], max_results=1
         )
@@ -294,8 +329,93 @@ def get_best_run(experiment_id: str, metric: str, ascending: bool = False) -> di
 
 
 @mcp.tool()
-def compare_runs(experiment_id: str, run_ids: list[str]) -> dict:
-    """Compare multiple runs side-by-side with their metrics and params"""
+def get_runs_sorted(
+    experiment_id: str,
+    sort_by: str,
+    ascending: bool = False,
+    limit: int = 10,
+    include_metrics: bool = False,
+    include_params: bool = False,
+    include_tags: bool = False
+) -> list[dict]:
+    """Get runs sorted by a metric or parameter. Works with special characters like '/' in names.
+
+    Args:
+        experiment_id: The experiment ID
+        sort_by: Metric or param to sort by (e.g., 'metrics.accuracy', 'metrics.trading/total_profit', 'params.learning_rate')
+        ascending: Sort ascending (True) or descending (False, default)
+        limit: Max number of runs to return
+        include_metrics: Include full metrics dict (may be large!)
+        include_params: Include full params dict
+        include_tags: Include tags dict
+
+    Examples:
+        get_runs_sorted("1", "metrics.trading/total_profit", limit=5)
+        get_runs_sorted("1", "metrics.accuracy", ascending=False, include_metrics=True)
+        get_runs_sorted("1", "params.learning_rate", ascending=True)
+    """
+    logger.info(f"Fetching sorted runs by {sort_by} in experiment {experiment_id}")
+    try:
+        client = mlflow.tracking.MlflowClient()
+
+        # Extract metric/param name and escape it
+        if sort_by.startswith("metrics."):
+            metric_name = sort_by[8:]  # Remove "metrics." prefix
+            order_by = f"metrics.`{metric_name}` {'ASC' if ascending else 'DESC'}"
+        elif sort_by.startswith("params."):
+            param_name = sort_by[7:]  # Remove "params." prefix
+            order_by = f"params.`{param_name}` {'ASC' if ascending else 'DESC'}"
+        else:
+            # Assume it's a metric if no prefix
+            order_by = f"metrics.`{sort_by}` {'ASC' if ascending else 'DESC'}"
+
+        runs = client.search_runs(
+            experiment_ids=[experiment_id],
+            order_by=[order_by],
+            max_results=limit
+        )
+
+        logger.info(f"Found {len(runs)} runs sorted by {sort_by}")
+
+        # Build result with selected fields
+        result = []
+        for run in runs:
+            run_dict = {
+                "run_id": run.info.run_id,
+                "experiment_id": run.info.experiment_id,
+                "status": run.info.status,
+                "start_time": run.info.start_time,
+                "end_time": run.info.end_time,
+            }
+
+            # Add optional fields
+            if include_metrics:
+                run_dict["metrics"] = run.data.metrics
+            else:
+                run_dict["metrics_count"] = len(run.data.metrics)
+                run_dict["metric_keys"] = list(run.data.metrics.keys())[:10]
+
+            if include_params:
+                run_dict["params"] = run.data.params
+            else:
+                run_dict["params_count"] = len(run.data.params)
+                run_dict["param_keys"] = list(run.data.params.keys())[:10]
+
+            if include_tags:
+                run_dict["tags"] = run.data.tags
+
+            result.append(run_dict)
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error fetching sorted runs by {sort_by}: {e}")
+        raise
+
+
+@mcp.tool()
+def compare_runs(experiment_id: str, run_ids: list[str], include_all_data: bool = False) -> dict:
+    """Compare runs side-by-side. By default shows key differences. Set include_all_data=True for full metrics/params (may be large!)"""
     logger.info(f"Comparing {len(run_ids)} runs in experiment {experiment_id}")
     try:
         client = mlflow.tracking.MlflowClient()
@@ -310,20 +430,41 @@ def compare_runs(experiment_id: str, run_ids: list[str]) -> dict:
             all_metrics.update(run.data.metrics.keys())
             all_params.update(run.data.params.keys())
 
-        comparison = {
-            "runs": [
-                {
-                    "run_id": run.info.run_id,
-                    "status": run.info.status,
-                    "start_time": run.info.start_time,
-                    "metrics": run.data.metrics,
-                    "params": run.data.params,
-                }
-                for run in runs_data
-            ],
-            "all_metrics": sorted(list(all_metrics)),
-            "all_params": sorted(list(all_params)),
-        }
+        if include_all_data:
+            # Full comparison with all data
+            comparison = {
+                "runs": [
+                    {
+                        "run_id": run.info.run_id,
+                        "status": run.info.status,
+                        "start_time": run.info.start_time,
+                        "metrics": run.data.metrics,
+                        "params": run.data.params,
+                    }
+                    for run in runs_data
+                ],
+                "all_metrics": sorted(list(all_metrics)),
+                "all_params": sorted(list(all_params)),
+            }
+        else:
+            # Summary comparison - just counts and sample keys
+            comparison = {
+                "runs": [
+                    {
+                        "run_id": run.info.run_id,
+                        "status": run.info.status,
+                        "start_time": run.info.start_time,
+                        "metrics_count": len(run.data.metrics),
+                        "params_count": len(run.data.params),
+                    }
+                    for run in runs_data
+                ],
+                "all_metrics": sorted(list(all_metrics))[:20],  # First 20
+                "all_params": sorted(list(all_params))[:20],    # First 20
+                "total_metrics": len(all_metrics),
+                "total_params": len(all_params),
+                "note": "Use include_all_data=True for full metrics/params, or get_run(run_id) for specific runs"
+            }
 
         logger.info(
             f"Comparison complete: {len(all_metrics)} metrics, {len(all_params)} params"
@@ -426,8 +567,8 @@ def get_model_version(model_name: str, version: str) -> dict:
 
 
 @mcp.tool()
-def search_runs_by_tags(experiment_id: str, tags: dict) -> list[dict]:
-    """Find runs with specific tags (e.g., {'team': 'nlp', 'production': 'true'})"""
+def search_runs_by_tags(experiment_id: str, tags: dict, limit: int = 10, include_details: bool = False) -> list[dict]:
+    """Find runs with specific tags (e.g., {'team': 'nlp', 'production': 'true'}). Set include_details=True for full data."""
     logger.info(f"Searching runs by tags in experiment {experiment_id}: {tags}")
     try:
         client = mlflow.tracking.MlflowClient()
@@ -437,21 +578,37 @@ def search_runs_by_tags(experiment_id: str, tags: dict) -> list[dict]:
         filter_string = " and ".join(filter_parts)
 
         runs = client.search_runs(
-            experiment_ids=[experiment_id], filter_string=filter_string, max_results=100
+            experiment_ids=[experiment_id], filter_string=filter_string, max_results=limit
         )
 
         logger.info(f"Found {len(runs)} runs matching tag filters")
-        return [
-            {
-                "run_id": run.info.run_id,
-                "experiment_id": run.info.experiment_id,
-                "status": run.info.status,
-                "metrics": run.data.metrics,
-                "params": run.data.params,
-                "tags": run.data.tags,
-            }
-            for run in runs
-        ]
+
+        if include_details:
+            return [
+                {
+                    "run_id": run.info.run_id,
+                    "experiment_id": run.info.experiment_id,
+                    "status": run.info.status,
+                    "metrics": run.data.metrics,
+                    "params": run.data.params,
+                    "tags": run.data.tags,
+                }
+                for run in runs
+            ]
+        else:
+            return [
+                {
+                    "run_id": run.info.run_id,
+                    "experiment_id": run.info.experiment_id,
+                    "status": run.info.status,
+                    "metrics_count": len(run.data.metrics),
+                    "params_count": len(run.data.params),
+                    "tags": run.data.tags,
+                    "metric_keys": list(run.data.metrics.keys())[:10],
+                    "param_keys": list(run.data.params.keys())[:10],
+                }
+                for run in runs
+            ]
     except Exception as e:
         logger.error(f"Error searching runs by tags {tags}: {e}")
         raise
