@@ -6,12 +6,12 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that en
 
 - **Experiment Management**: List and search experiments, discover available metrics and parameters
 - **Run Analysis**: Retrieve run details, query runs with filters, find best performing models
-- **Advanced Sorting**: Sort runs by any metric/parameter with flexible field selection
 - **Metrics & Parameters**: Get metric histories, compare parameters across runs
 - **Artifacts**: Browse and download run artifacts
 - **Model Registry**: Access registered models, versions, and deployment stages
 - **Comparison Tools**: Side-by-side run comparisons, best run selection
 - **Tag-based Search**: Filter runs by custom tags
+- **Pagination**: Offset-based pagination for browsing large result sets
 
 ## Installation
 
@@ -74,11 +74,10 @@ Add to your Claude Desktop config file:
 
 ### Runs
 
-- **`get_runs(experiment_id, limit=5, include_details=False)`** - Get runs for an experiment
-- **`get_run(run_id)`** - Get detailed run information
-- **`get_runs_sorted(experiment_id, sort_by, ascending=False, limit=10, include_metrics=False, include_params=False, include_tags=False)`** - Get runs sorted by metric/parameter with field selection
-- **`query_runs(experiment_id, query, limit=5, include_details=False)`** - Filter runs (e.g., `"metrics.accuracy > 0.9"`)
-- **`search_runs_by_tags(experiment_id, tags, limit=5, include_details=False)`** - Find runs by tags
+- **`get_runs(experiment_id, limit=3, offset=0, order_by=None)`** - Get runs with full details. Supports sorting and pagination
+- **`get_run(run_id)`** - Get detailed run information for a specific run
+- **`query_runs(experiment_id, query, limit=3, offset=0, order_by=None)`** - Filter and sort runs (e.g., `"metrics.accuracy > 0.9"`, order_by=`"metrics.accuracy DESC"`)
+- **`search_runs_by_tags(experiment_id, tags, limit=3, offset=0)`** - Find runs by tags with pagination
 
 ### Metrics & Parameters
 
@@ -94,7 +93,7 @@ Add to your Claude Desktop config file:
 ### Analysis & Comparison
 
 - **`get_best_run(experiment_id, metric, ascending=False)`** - Find best run by metric (supports special characters)
-- **`compare_runs(experiment_id, run_ids, include_all_data=False)`** - Side-by-side comparison
+- **`compare_runs(experiment_id, run_ids)`** - Side-by-side comparison with full data
 
 ### Model Registry
 
