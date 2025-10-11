@@ -28,7 +28,7 @@ pip install mlflow-mcp
 ### From Source
 
 ```bash
-git clone https://github.com/kirillkruglikov/mlflow-mcp.git
+git clone https://github.com/kkruglik/mlflow-mcp.git
 cd mlflow-mcp
 uv sync
 uv run mlflow-mcp
@@ -137,6 +137,7 @@ Contributions welcome! Please open an issue or submit a pull request.
 
 ## Links
 
-- [GitHub Repository](https://github.com/kirillkruglikov/mlflow-mcp)
+- [PyPI Package](https://pypi.org/project/mlflow-mcp/)
+- [GitHub Repository](https://github.com/kkruglik/mlflow-mcp)
 - [MLflow Documentation](https://mlflow.org/docs/latest/index.html)
 - [Model Context Protocol](https://modelcontextprotocol.io)
