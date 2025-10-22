@@ -141,6 +141,7 @@ def get_runs(
                 "end_time": run.info.end_time,
                 "metrics": run.data.metrics,
                 "params": run.data.params,
+                "tags": run.data.tags,
             }
             for run in runs
         ]
@@ -504,7 +505,9 @@ def search_runs_by_tags(
 
         # Apply offset
         runs = runs[offset:]
-        logger.info(f"Found {len(runs)} runs matching tag filters (after offset={offset})")
+        logger.info(
+            f"Found {len(runs)} runs matching tag filters (after offset={offset})"
+        )
 
         return [
             {
