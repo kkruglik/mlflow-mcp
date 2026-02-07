@@ -494,7 +494,8 @@ def search_runs_by_tags(
     try:
         client = MlflowClient()
 
-        filter_parts = [f"tags.{key} = '{value}'" for key, value in tags.items()]
+        # Use backticks to escape special characters (/, -, etc.) or reserved words (case, name, etc.)
+        filter_parts = [f"tags.`{key}` = '{value}'" for key, value in tags.items()]
         filter_string = " and ".join(filter_parts)
 
         runs = client.search_runs(
