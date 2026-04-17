@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-04-17
+
+### Added
+
+**MLflow 3 LoggedModel support**
+- `search_logged_models` — search logged models across experiments by metrics/params/tags with ordering
+- `get_logged_model` — fetch full details of a logged model by ID
+
+**Extended experiment & run tools**
+- `search_experiments` — filter and sort experiments by name, tags, timestamps
+- `get_parent_run` — navigate nested run hierarchies
+
+**Extended model registry tools**
+- `get_registered_model` — full model details including all versions and aliases
+- `get_model_version_by_alias` — retrieve a version by alias (e.g. "champion")
+- `get_latest_versions` — get latest versions per stage
+
+**Write / action tools**
+- `register_model` — register a logged model or run artifact into the registry
+- `set_registered_model_tag` — add tags to a registered model
+- `set_model_alias` — assign an alias to a model version
+- `set_run_tag` — annotate runs with tags
+- `set_experiment_tag` — annotate experiments with tags
+- `update_model_version` — update model version description
+- `transition_model_version_stage` — transition version to Staging/Production/Archived
+- `copy_model_version` — promote a model version to another registered model (MLflow 3 pattern)
+
+**MCP Prompts**
+- `compare_runs_by_ids` — compare specific runs side-by-side
+- `find_best_run` — find and analyze the best run in an experiment by metric
+- `promote_best_model` — end-to-end workflow: find best model → register → tag → alias → promote
+
+**Project-scoped MCP config**
+- Added `.mcp.json` for running the server directly from the repo in Claude Code
+
 ## [0.1.7] - 2025-01-11
 
 ### Added

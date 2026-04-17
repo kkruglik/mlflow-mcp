@@ -1,9 +1,12 @@
 import logging
 import os
+from typing import Any
 
 import mlflow
 from mcp.server.fastmcp import FastMCP
 from mlflow.tracking import MlflowClient
+
+from mlflow_mcp.helpers import serialize_logged_model
 
 logging.basicConfig(level=logging.INFO)
 
@@ -34,6 +37,52 @@ def get_experiments() -> list[dict]:
         return [{"name": e.name, "id": e.experiment_id} for e in experiments]
     except Exception as e:
         logger.error(f"Error fetching experiments: {e}")
+        raise
+
+
+@mcp.tool()
+def search_experiments(
+    filter_string: str | None = None,
+    order_by: list[str] | None = None,
+    max_results: int = 100,
+) -> list[dict]:
+    """Search experiments with optional filtering and sorting.
+
+    Args:
+        filter_string: Filter query, e.g. "name LIKE 'btc%'" or "tags.team = 'ml'".
+                       Supports name, creation_time, last_update_time, tags.<key>.
+        order_by: List of sort clauses, e.g. ["last_update_time DESC", "name ASC"].
+        max_results: Maximum number of experiments to return (default 100).
+
+    Examples:
+        search_experiments(filter_string="name LIKE 'btc%'")
+        search_experiments(order_by=["last_update_time DESC"])
+    """
+    logger.info(
+        f"Searching experiments (filter={filter_string!r}, order_by={order_by})"
+    )
+    try:
+        client = MlflowClient()
+        experiments = client.search_experiments(
+            filter_string=filter_string,
+            order_by=order_by,
+            max_results=max_results,
+        )
+        logger.info(f"Found {len(experiments)} experiments")
+        return [
+            {
+                "experiment_id": e.experiment_id,
+                "name": e.name,
+                "artifact_location": e.artifact_location,
+                "lifecycle_stage": e.lifecycle_stage,
+                "creation_time": e.creation_time,
+                "last_update_time": e.last_update_time,
+                "tags": e.tags,
+            }
+            for e in experiments
+        ]
+    except Exception as e:
+        logger.error(f"Error searching experiments: {e}")
         raise
 
 
@@ -172,6 +221,36 @@ def get_run(run_id: str) -> dict:
         }
     except Exception as e:
         logger.error(f"Error fetching run {run_id}: {e}")
+        raise
+
+
+@mcp.tool()
+def get_parent_run(run_id: str) -> dict | None:
+    """Get the parent run of a nested run. Returns None if the run has no parent.
+
+    Args:
+        run_id: The child run ID to find the parent for.
+    """
+    logger.info(f"Fetching parent run for: {run_id}")
+    try:
+        client = MlflowClient()
+        parent = client.get_parent_run(run_id)
+        if parent is None:
+            logger.info(f"Run {run_id} has no parent")
+            return None
+        logger.info(f"Found parent run: {parent.info.run_id}")
+        return {
+            "run_id": parent.info.run_id,
+            "experiment_id": parent.info.experiment_id,
+            "status": parent.info.status,
+            "start_time": parent.info.start_time,
+            "end_time": parent.info.end_time,
+            "metrics": parent.data.metrics,
+            "params": parent.data.params,
+            "tags": parent.data.tags,
+        }
+    except Exception as e:
+        logger.error(f"Error fetching parent run for {run_id}: {e}")
         raise
 
 
@@ -484,6 +563,105 @@ def get_model_version(model_name: str, version: str) -> dict:
 
 
 @mcp.tool()
+def get_registered_model(name: str) -> dict:
+    """Get full details of a registered model including all versions and aliases.
+
+    Args:
+        name: Name of the registered model.
+    """
+    logger.info(f"Fetching registered model: {name}")
+    try:
+        client = MlflowClient()
+        model = client.get_registered_model(name)
+        logger.info(f"Retrieved registered model '{name}'")
+        return {
+            "name": model.name,
+            "creation_timestamp": model.creation_timestamp,
+            "last_updated_timestamp": model.last_updated_timestamp,
+            "description": model.description,
+            "tags": model.tags,
+            "aliases": {a.alias: a.version for a in (model.aliases or [])},
+            "latest_versions": [
+                {
+                    "version": v.version,
+                    "current_stage": v.current_stage,
+                    "status": v.status,
+                    "run_id": v.run_id,
+                    "description": v.description,
+                }
+                for v in (model.latest_versions or [])
+            ],
+        }
+    except Exception as e:
+        logger.error(f"Error fetching registered model '{name}': {e}")
+        raise
+
+
+@mcp.tool()
+def get_model_version_by_alias(name: str, alias: str) -> dict:
+    """Get a model version by its alias (e.g. 'champion', 'production').
+
+    Args:
+        name: Name of the registered model.
+        alias: The alias assigned to the version, e.g. 'champion'.
+    """
+    logger.info(f"Fetching model version by alias: {name}@{alias}")
+    try:
+        client = MlflowClient()
+        version = client.get_model_version_by_alias(name, alias)
+        logger.info(f"Found version {version.version} for alias '{alias}'")
+        return {
+            "name": version.name,
+            "version": version.version,
+            "alias": alias,
+            "current_stage": version.current_stage,
+            "status": version.status,
+            "run_id": version.run_id,
+            "creation_timestamp": version.creation_timestamp,
+            "last_updated_timestamp": version.last_updated_timestamp,
+            "description": version.description,
+            "tags": version.tags,
+            "source": version.source,
+        }
+    except Exception as e:
+        logger.error(f"Error fetching model version by alias {name}@{alias}: {e}")
+        raise
+
+
+@mcp.tool()
+def get_latest_versions(name: str, stages: list[str] | None = None) -> list[dict]:
+    """Get latest model versions for each stage (e.g. 'Staging', 'Production').
+
+    Args:
+        name: Name of the registered model.
+        stages: List of stages to filter by, e.g. ['Production', 'Staging'].
+                If None, returns latest version for all stages.
+    """
+    logger.info(f"Fetching latest versions for model '{name}' (stages={stages})")
+    try:
+        client = MlflowClient()
+        versions = client.get_latest_versions(name, stages=stages)
+        logger.info(f"Found {len(versions)} latest versions for '{name}'")
+        return [
+            {
+                "name": v.name,
+                "version": v.version,
+                "current_stage": v.current_stage,
+                "status": v.status,
+                "run_id": v.run_id,
+                "creation_timestamp": v.creation_timestamp,
+                "last_updated_timestamp": v.last_updated_timestamp,
+                "description": v.description,
+                "tags": v.tags,
+            }
+            for v in versions
+        ]
+    except Exception as e:
+        logger.error(f"Error fetching latest versions for model '{name}': {e}")
+        raise
+
+
+@mcp.tool()
 def search_runs_by_tags(
     experiment_id: str, tags: dict, limit: int = 3, offset: int = 0
 ) -> list[dict]:
@@ -544,6 +722,323 @@ def get_artifact_content(run_id: str, artifact_path: str) -> str:
             f"Error reading artifact content {artifact_path} from run {run_id}: {e}"
         )
         raise
+
+
+@mcp.tool()
+def search_logged_models(
+    experiment_ids: list[str],
+    filter_string: str | None = None,
+    max_results: int = 5,
+    datasets: list[dict[str, Any]] | None = None,
+    order_by: list[dict[str, Any]] | None = None,
+) -> list[dict]:
+    """Search for logged models across one or more experiments.
+
+    Args:
+        experiment_ids: List of experiment IDs to search in (at least one required).
+        filter_string: SQL-like filter, e.g. 'metrics.accuracy > 0.9' or "tags.release = 'v1.0'".
+                       Multiple conditions use AND only (OR not supported).
+        max_results: Maximum number of models to return (default 5).
+        datasets: Filter by datasets the model was evaluated on. Each dict must include
+                  'name' (str) and 'digest' (str), e.g. [{'name': 'val', 'digest': 'abc123'}].
+        order_by: List of sort clauses, each a dict with 'field_name' (str) and 'ascending' (bool),
+                  e.g. [{'field_name': 'metrics.accuracy', 'ascending': False}].
+
+    Examples:
+        search_logged_models(["1"], filter_string="metrics.accuracy > 0.9")
+        search_logged_models(["1", "2"], order_by=[{"field_name": "metrics.f1", "ascending": False}])
+    """
+    logger.info(
+        f"Searching logged models in experiments {experiment_ids} "
+        f"(filter={filter_string!r}, max_results={max_results}, order_by={order_by})"
+    )
+    try:
+        client = MlflowClient()
+        results = client.search_logged_models(
+            experiment_ids=experiment_ids,
+            filter_string=filter_string,
+            datasets=datasets,
+            max_results=max_results,
+            order_by=order_by,
+        )
+        logger.info(f"Found {len(results)} logged models")
+        return [serialize_logged_model(m) for m in results]
+    except Exception as e:
+        logger.error(
+            f"Error searching logged models in experiments {experiment_ids}: {e}"
+        )
+        raise
+
+
+@mcp.tool()
+def get_logged_model(model_id: str) -> dict:
+    """Get detailed information about a specific logged model by its ID.
+
+    Args:
+        model_id: The logged model ID (obtained from search_logged_models results).
+    """
+    logger.info(f"Fetching logged model: {model_id}")
+    try:
+        client = MlflowClient()
+        model = client.get_logged_model(model_id)
+        logger.info(f"Retrieved logged model {model_id} (status: {model.status})")
+        return serialize_logged_model(model)
+    except Exception as e:
+        logger.error(f"Error fetching logged model {model_id}: {e}")
+        raise
+
+
+@mcp.tool()
+def register_model(
+    model_name: str,
+    model_uri: str,
+    tags: dict[str, Any] | None = None,
+) -> dict:
+    """Register a model into the model registry. Creates the registered model if it doesn't exist.
+
+    Args:
+        model_name: Name for the registered model.
+        model_uri: URI of the model to register. Supports:
+                   - LoggedModel: 'models:/m-abc123'
+                   - Run artifact: 'runs:/run_id/artifact_path'
+        tags: Optional dict of tags to set on the model version.
+
+    Examples:
+        register_model("btc-classifier", "models:/m-abc123")
+        register_model("btc-classifier", "runs:/abc123/model", tags={"framework": "lightgbm"})
+    """
+    logger.info(f"Registering '{model_name}' from {model_uri}")
+    try:
+        mv = mlflow.register_model(model_uri, model_name, tags=tags)
+        logger.info(f"Registered '{model_name}' v{mv.version}")
+        return {
+            "name": mv.name,
+            "version": mv.version,
+            "status": mv.status,
+            "source": mv.source,
+            "run_id": mv.run_id,
+        }
+    except Exception as e:
+        logger.error(f"Error registering '{model_name}' from {model_uri}: {e}")
+        raise
+
+
+@mcp.tool()
+def set_registered_model_tag(name: str, key: str, value: str) -> None:
+    """Set a tag on a registered model (e.g. problem_type, team, framework).
+
+    Args:
+        name: Name of the registered model.
+        key: Tag key, e.g. 'problem_type', 'team', 'framework'.
+        value: Tag value.
+    """
+    logger.info(f"Setting tag {key}={value!r} on registered model '{name}'")
+    try:
+        client = MlflowClient()
+        client.set_registered_model_tag(name, key, value)
+        logger.info(f"Tag {key}={value!r} set on registered model '{name}'")
+    except Exception as e:
+        logger.error(f"Error setting tag {key} on registered model '{name}': {e}")
+        raise
+
+
+@mcp.tool()
+def set_model_alias(name: str, alias: str, version: str) -> None:
+    """Assign an alias to a specific model version (e.g. promote best model to 'champion').
+
+    Args:
+        name: Name of the registered model.
+        alias: Alias to assign, e.g. 'champion', 'production', 'baseline'.
+        version: Model version number to assign the alias to.
+
+    Examples:
+        set_model_alias("lightgbm", "champion", "3")
+    """
+    logger.info(f"Setting alias '{alias}' -> {name} v{version}")
+    try:
+        client = MlflowClient()
+        client.set_registered_model_alias(name, alias, version)
+        logger.info(f"Alias '{alias}' set to {name} v{version}")
+    except Exception as e:
+        logger.error(f"Error setting alias '{alias}' on {name} v{version}: {e}")
+        raise
+
+
+@mcp.tool()
+def set_run_tag(run_id: str, key: str, value: str) -> None:
+    """Set a tag on a run (e.g. annotate best model, flag for review).
+
+    Args:
+        run_id: The run ID to tag.
+        key: Tag key, e.g. 'best_model', 'reviewed_by'.
+        value: Tag value.
+    """
+    logger.info(f"Setting tag {key}={value!r} on run {run_id}")
+    try:
+        client = MlflowClient()
+        client.set_tag(run_id, key, value)
+        logger.info(f"Tag {key}={value!r} set on run {run_id}")
+    except Exception as e:
+        logger.error(f"Error setting tag {key} on run {run_id}: {e}")
+        raise
+
+
+@mcp.tool()
+def set_experiment_tag(experiment_id: str, key: str, value: str) -> None:
+    """Set a tag on an experiment.
+
+    Args:
+        experiment_id: The experiment ID to tag.
+        key: Tag key, e.g. 'team', 'status'.
+        value: Tag value.
+    """
+    logger.info(f"Setting tag {key}={value!r} on experiment {experiment_id}")
+    try:
+        client = MlflowClient()
+        client.set_experiment_tag(experiment_id, key, value)
+        logger.info(f"Tag {key}={value!r} set on experiment {experiment_id}")
+    except Exception as e:
+        logger.error(f"Error setting tag {key} on experiment {experiment_id}: {e}")
+        raise
+
+
+@mcp.tool()
+def update_model_version(name: str, version: str, description: str) -> dict:
+    """Update the description of a model version.
+
+    Args:
+        name: Name of the registered model.
+        version: Model version number.
+        description: New description text.
+    """
+    logger.info(f"Updating description for {name} v{version}")
+    try:
+        client = MlflowClient()
+        mv = client.update_model_version(name, version, description=description)
+        logger.info(f"Updated description for {name} v{version}")
+        return {
+            "name": mv.name,
+            "version": mv.version,
+            "description": mv.description,
+            "current_stage": mv.current_stage,
+            "status": mv.status,
+        }
+    except Exception as e:
+        logger.error(f"Error updating {name} v{version}: {e}")
+        raise
+
+
+@mcp.tool()
+def transition_model_version_stage(
+    name: str, version: str, stage: str, archive_existing: bool = False
+) -> dict:
+    """Transition a model version to a new stage (Staging, Production, Archived).
+
+    Deprecated since MLflow 2.9. Prefer aliases (set_model_alias) and copy_model_version
+    for MLflow 3+ workflows. Use this only when working with legacy stage-based deployments.
+
+    Args:
+        name: Name of the registered model.
+        version: Model version number.
+        stage: Target stage: 'Staging', 'Production', or 'Archived'.
+        archive_existing: If True, archive existing versions in the target stage.
+    """
+    logger.info(f"Transitioning {name} v{version} to stage '{stage}'")
+    try:
+        client = MlflowClient()
+        mv = client.transition_model_version_stage(
+            name, version, stage, archive_existing_versions=archive_existing
+        )
+        logger.info(f"Transitioned {name} v{version} to '{stage}'")
+        return {
+            "name": mv.name,
+            "version": mv.version,
+            "current_stage": mv.current_stage,
+            "status": mv.status,
+        }
+    except Exception as e:
+        logger.error(f"Error transitioning {name} v{version} to '{stage}': {e}")
+        raise
+
+
+@mcp.tool()
+def copy_model_version(
+    src_model_name: str, src_version: str, dst_model_name: str
+) -> dict:
+    """Promote a model version to another registered model (MLflow 3 promotion pattern).
+    Creates the destination model if it doesn't exist.
+
+    Args:
+        src_model_name: Source registered model name.
+        src_version: Source model version number.
+        dst_model_name: Destination registered model name, e.g. 'my-model-prod'.
+
+    Examples:
+        copy_model_version("my-model-dev", "3", "my-model-prod")
+    """
+    src_model_uri = f"models:/{src_model_name}/{src_version}"
+    logger.info(f"Copying model version {src_model_uri} -> {dst_model_name}")
+    try:
+        client = MlflowClient()
+        mv = client.copy_model_version(src_model_uri, dst_model_name)
+        logger.info(f"Copied to {dst_model_name} v{mv.version}")
+        return {
+            "name": mv.name,
+            "version": mv.version,
+            "status": mv.status,
+            "source": mv.source,
+            "run_id": mv.run_id,
+        }
+    except Exception as e:
+        logger.error(f"Error copying {src_model_uri} to {dst_model_name}: {e}")
+        raise
+
+
+@mcp.prompt()
+def compare_runs_by_ids(experiment_id: str, run_ids: list[str]) -> str:
+    """Compare specific runs side-by-side by their IDs.
+
+    Args:
+        experiment_id: The experiment the runs belong to.
+        run_ids: List of run IDs to compare.
+    """
+    return f"""Compare these runs from experiment {experiment_id} side-by-side: {run_ids}.
+
+1. Use get_run for each run ID to fetch full details.
+2. Use compare_runs to get a structured side-by-side comparison of all metrics and params.
+3. Highlight which metrics differ most, which params are responsible for the differences, and which run wins overall. Explain why."""
+
+
+@mcp.prompt()
+def find_best_run(experiment_id: str, metric: str) -> str:
+    """Find and analyze the best run in an experiment by a given metric.
+
+    Args:
+        experiment_id: The experiment ID to analyze.
+        metric: Metric to rank by, e.g. 'test/recall', 'test/f1'.
+    """
+    return f"""Find the best run in experiment {experiment_id} by {metric}.
+
+Get the top run by that metric, then fetch the top 5 for comparison.
+Compare them side-by-side and summarize: which run wins, what params made the difference, any metric tradeoffs worth noting."""
+
+
+@mcp.prompt()
+def promote_best_model(experiment_id: str, metric: str, model_name: str) -> str:
+    """Find the best model and promote it to the registry with tags and alias.
+
+    Args:
+        experiment_id: The experiment ID to search in.
+        metric: Metric to rank models by, e.g. 'test/recall', 'test/f1'.
+        model_name: Name to register the model under in the registry.
+    """
+    return f"""Promote the best model from experiment {experiment_id} to the registry as "{model_name}".
+
+Find the best logged model by {metric}. Register it as "{model_name}" with a selection_metric tag.
+Add relevant model-level tags (problem_type, framework, asset). Tag the source run as registered.
+Assign the "champion" alias to the new version.
+Ask the user if they want to copy it to a separate production model entry.
+Summarize what was done."""
 
 
 @mcp.tool()
