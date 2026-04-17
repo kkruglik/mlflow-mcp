@@ -41,9 +41,9 @@ uv run mlflow-mcp
 
 Add to your Claude Desktop config file:
 
-**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-**Linux**: `~/.config/claude/claude_desktop_config.json`
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+- **Linux**: `~/.config/claude/claude_desktop_config.json`
 
 ```json
 {
@@ -77,10 +77,54 @@ Add `.mcp.json` to your project root:
 }
 ```
 
+### Authenticated Server
+
+For MLflow servers with authentication, add credentials to the `env` block:
+
+```json
+{
+  "mcpServers": {
+    "mlflow": {
+      "command": "uvx",
+      "args": ["mlflow-mcp"],
+      "env": {
+        "MLFLOW_TRACKING_URI": "https://mlflow.company.com",
+        "MLFLOW_TRACKING_USERNAME": "your-username",
+        "MLFLOW_TRACKING_PASSWORD": "your-password"
+      }
+    }
+  }
+}
+```
+
+For Databricks or token-based auth, use `MLFLOW_TRACKING_TOKEN` instead:
+
+```json
+{
+  "mcpServers": {
+    "mlflow": {
+      "command": "uvx",
+      "args": ["mlflow-mcp"],
+      "env": {
+        "MLFLOW_TRACKING_URI": "https://mlflow.company.com",
+        "MLFLOW_TRACKING_TOKEN": "your-token"
+      }
+    }
+  }
+}
+```
+
 ### Environment Variables
 
-- **`MLFLOW_TRACKING_URI`** (required): Your MLflow tracking server URL
+**Required:**
+
+- **`MLFLOW_TRACKING_URI`** — Your MLflow tracking server URL
   - Examples: `http://127.0.0.1:5000`, `https://mlflow.company.com`
+
+**Authentication (if your server requires it):**
+
+- **`MLFLOW_TRACKING_USERNAME`** + **`MLFLOW_TRACKING_PASSWORD`** — HTTP Basic Auth (MLflow built-in auth plugin)
+- **`MLFLOW_TRACKING_TOKEN`** — Bearer token auth (Databricks or token-based setups)
 
 ## Available Tools
 
@@ -152,21 +196,47 @@ Built-in guided workflows available as slash commands:
 
 ## Usage Examples
 
-### Ask Claude
+### Explore experiments and runs
 
-> "Show me all experiments in MLflow"
+> "Show me all experiments. Which ones were updated recently?"
 
-> "What are the top 5 runs by accuracy in experiment 'my-experiment'?"
+> "What metrics and parameters are tracked in experiment 'fraud-detection'?"
 
-> "Compare runs abc123 and def456"
+> "Get the top 10 runs in 'fraud-detection' sorted by test/f1. Show me the params that differ most between the top 3."
 
-> "Find the best model by test/recall and register it as 'my-classifier'"
+> "Find all runs tagged with model_type=lightgbm and compare their recall scores."
 
-> "Which logged model has the highest F1 score?"
+### Analyze a training run
 
-> "Set the champion alias on version 3 of my-model"
+> "Show me the full details of run abc123 — metrics, params, and artifacts."
 
-> "Promote my-classifier v2 to production"
+> "Plot the training loss curve for run abc123." *(Claude fetches metric history and renders a chart)*
+
+> "This run has a parent — show me the parent run and compare their metrics."
+
+### Find and register the best model
+
+> "Find the best logged model in experiment 'fraud-detection' by test/recall. Register it as 'fraud-classifier' with a selection_metric tag."
+
+> "Which logged model in experiments 1 and 2 has the highest F1 score on the validation set?"
+
+> "Register the model from run abc123 artifact path 'model/' as 'my-classifier'."
+
+### Manage the model registry
+
+> "Show me all versions of 'fraud-classifier' with their aliases and stages."
+
+> "Set the champion alias on version 3 of fraud-classifier."
+
+> "Update the description of fraud-classifier v3 to explain what dataset it was trained on."
+
+> "Copy fraud-classifier v3 to a separate 'fraud-classifier-prod' model as the production entry."
+
+### End-to-end promotion workflow
+
+> "Find the best model in 'fraud-detection' by test/recall, register it as 'fraud-classifier', tag it with the framework and problem type, and set it as champion. Ask me before copying to prod."
+
+*(This maps directly to the `promote_best_model` built-in prompt)*
 
 ## Requirements
 
