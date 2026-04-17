@@ -934,6 +934,9 @@ def transition_model_version_stage(
 ) -> dict:
     """Transition a model version to a new stage (Staging, Production, Archived).
 
+    Deprecated since MLflow 2.9. Prefer aliases (set_model_alias) and copy_model_version
+    for MLflow 3+ workflows. Use this only when working with legacy stage-based deployments.
+
     Args:
         name: Name of the registered model.
         version: Model version number.
