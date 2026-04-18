@@ -22,8 +22,7 @@ if not MLFLOW_TRACKING_URI:
 
 mcp = FastMCP(
     "mlflow",
-    version="0.2.1",
-    description="MLflow MCP server — experiment tracking, model registry, and promotion workflows",
+    instructions="MLflow MCP server — experiment tracking, model registry, and promotion workflows",
 )
 
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
