@@ -10,7 +10,7 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that en
 - **Artifacts**: Browse and download run artifacts
 - **LoggedModel Support**: Search and retrieve MLflow 3 LoggedModel entities
 - **Model Registry**: Full registry management — register, tag, alias, stage, and promote models
-- **Write Actions**: Tag runs/experiments, assign aliases, register and promote models
+- **Write & Delete Actions**: Tag, alias, register, promote, and delete runs/experiments/models
 - **MCP Prompts**: Built-in guided workflows for common tasks
 - **Pagination**: Offset-based pagination for browsing large result sets
 
@@ -116,83 +116,103 @@ For Databricks or token-based auth, use `MLFLOW_TRACKING_TOKEN` instead:
 
 ### Environment Variables
 
-**Required:**
+| Variable | Required | Description |
+|---|---|---|
+| `MLFLOW_TRACKING_URI` | Yes | MLflow tracking server URL, e.g. `http://127.0.0.1:5000` |
+| `MLFLOW_TRACKING_USERNAME` | No | HTTP Basic Auth username (MLflow built-in auth) |
+| `MLFLOW_TRACKING_PASSWORD` | No | HTTP Basic Auth password (MLflow built-in auth) |
+| `MLFLOW_TRACKING_TOKEN` | No | Bearer token (Databricks or token-based setups) |
 
-- **`MLFLOW_TRACKING_URI`** — Your MLflow tracking server URL
-  - Examples: `http://127.0.0.1:5000`, `https://mlflow.company.com`
-
-**Authentication (if your server requires it):**
-
-- **`MLFLOW_TRACKING_USERNAME`** + **`MLFLOW_TRACKING_PASSWORD`** — HTTP Basic Auth (MLflow built-in auth plugin)
-- **`MLFLOW_TRACKING_TOKEN`** — Bearer token auth (Databricks or token-based setups)
-
-## Available Tools
+## Tools
 
 ### Experiments
 
-- **`get_experiments()`** - List all experiments
-- **`search_experiments(filter_string, order_by, max_results)`** - Filter and sort experiments
-- **`get_experiment_by_name(name)`** - Get experiment by name
-- **`get_experiment_metrics(experiment_id)`** - Discover all unique metrics
-- **`get_experiment_params(experiment_id)`** - Discover all unique parameters
-- **`set_experiment_tag(experiment_id, key, value)`** - Tag an experiment
+| Tool | Description |
+|---|---|
+| `get_experiments()` | List all experiments |
+| `search_experiments(filter_string, order_by, max_results)` | Filter and sort experiments |
+| `get_experiment_by_name(name)` | Get experiment by name |
+| `get_experiment_metrics(experiment_id)` | Discover all unique metric keys |
+| `get_experiment_params(experiment_id)` | Discover all unique parameter keys |
+| `set_experiment_tag(experiment_id, key, value)` | Tag an experiment |
+| `delete_experiment(experiment_id)` | Delete an experiment (moves to deleted stage) |
 
 ### Runs
 
-- **`get_runs(experiment_id, limit=3, offset=0, order_by=None)`** - Get runs with full details
-- **`get_run(run_id)`** - Get detailed run information
-- **`get_parent_run(run_id)`** - Get parent run for nested runs
-- **`query_runs(experiment_id, query, limit=3, offset=0, order_by=None)`** - Filter and sort runs
-- **`search_runs_by_tags(experiment_id, tags, limit=3, offset=0)`** - Find runs by tags
-- **`set_run_tag(run_id, key, value)`** - Tag a run
+| Tool | Description |
+|---|---|
+| `get_runs(experiment_id, limit, offset, order_by)` | List runs with full details, sorting and pagination |
+| `get_run(run_id)` | Get detailed run information |
+| `get_parent_run(run_id)` | Get parent run for nested runs |
+| `query_runs(experiment_id, query, limit, offset, order_by)` | Filter runs, e.g. `"metrics.accuracy > 0.9"` |
+| `search_runs_by_tags(experiment_id, tags, limit, offset)` | Find runs by tag key/value |
+| `set_run_tag(run_id, key, value)` | Tag a run |
+| `delete_run(run_id)` | Delete a run (moves to deleted stage) |
 
 ### Metrics & Parameters
 
-- **`get_run_metrics(run_id)`** - Get all metrics for a run
-- **`get_run_metric(run_id, metric_name)`** - Get full metric history with steps
+| Tool | Description |
+|---|---|
+| `get_run_metrics(run_id)` | Get all metrics for a run |
+| `get_run_metric(run_id, metric_name)` | Get full metric history with steps |
 
 ### Artifacts
 
-- **`get_run_artifacts(run_id, path="")`** - List artifacts (supports browsing directories)
-- **`get_run_artifact(run_id, artifact_path)`** - Download artifact
-- **`get_artifact_content(run_id, artifact_path)`** - Read artifact content (text/json)
+| Tool | Description |
+|---|---|
+| `get_run_artifacts(run_id, path)` | List artifacts, supports browsing subdirectories |
+| `get_run_artifact(run_id, artifact_path)` | Download an artifact file |
+| `get_artifact_content(run_id, artifact_path)` | Read artifact content as text/JSON |
 
 ### Analysis & Comparison
 
-- **`get_best_run(experiment_id, metric, ascending=False)`** - Find best run by metric
-- **`compare_runs(experiment_id, run_ids)`** - Side-by-side run comparison
+| Tool | Description |
+|---|---|
+| `get_best_run(experiment_id, metric, ascending)` | Find best run by metric |
+| `compare_runs(experiment_id, run_ids)` | Side-by-side run comparison |
 
 ### Logged Models (MLflow 3)
 
-- **`search_logged_models(experiment_ids, filter_string, order_by, max_results)`** - Search logged models by metrics/params/tags
-- **`get_logged_model(model_id)`** - Get full details of a logged model
+| Tool | Description |
+|---|---|
+| `search_logged_models(experiment_ids, filter_string, order_by, max_results)` | Search logged models by metrics/params/tags |
+| `get_logged_model(model_id)` | Get full details of a logged model |
 
 ### Model Registry
 
-- **`get_registered_models()`** - List all registered models
-- **`get_registered_model(name)`** - Full model details including versions and aliases
-- **`get_model_versions(model_name)`** - Get all versions of a model
-- **`get_model_version(model_name, version)`** - Get version details with metrics
-- **`get_model_version_by_alias(name, alias)`** - Get version by alias (e.g. "champion")
-- **`get_latest_versions(name, stages)`** - Get latest versions per stage
-- **`register_model(model_name, model_uri, tags)`** - Register a model into the registry
-- **`update_model_version(name, version, description)`** - Update version description
-- **`set_registered_model_tag(name, key, value)`** - Tag a registered model
-- **`set_model_alias(name, alias, version)`** - Assign an alias to a model version
-- **`transition_model_version_stage(name, version, stage)`** - Transition to Staging/Production/Archived
-- **`copy_model_version(src_model_name, src_version, dst_model_name)`** - Promote version to another registered model
+| Tool | Description |
+|---|---|
+| `get_registered_models()` | List all registered models |
+| `get_registered_model(name)` | Full model details including versions and aliases |
+| `get_model_versions(model_name)` | Get all versions of a model |
+| `get_model_version(model_name, version)` | Get version details with metrics |
+| `get_model_version_by_alias(name, alias)` | Get version by alias, e.g. `"champion"` |
+| `get_latest_versions(name, stages)` | Get latest versions per stage |
+| `register_model(model_name, model_uri, tags)` | Register a model into the registry |
+| `update_model_version(name, version, description)` | Update version description |
+| `set_registered_model_tag(name, key, value)` | Tag a registered model |
+| `set_model_alias(name, alias, version)` | Assign an alias to a model version |
+| `delete_model_alias(name, alias)` | Remove an alias from a model |
+| `copy_model_version(src_model_name, src_version, dst_model_name)` | Promote version to another registered model |
+| `transition_model_version_stage(name, version, stage)` | Transition to Staging/Production/Archived *(deprecated since MLflow 2.9, use aliases instead)* |
+| `delete_model_version(name, version)` | Delete a model version |
+| `delete_registered_model(name)` | Delete a registered model and all its versions |
 
 ### Health
 
-- **`health()`** - Check server connectivity
+| Tool | Description |
+|---|---|
+| `health()` | Check server connectivity |
 
 ## Prompts
 
-Built-in guided workflows available as slash commands:
+Built-in guided workflows available as slash commands in Claude:
 
-- **`compare_runs_by_ids`** - Compare specific runs side-by-side
-- **`find_best_run`** - Find and analyze the best run in an experiment by metric
-- **`promote_best_model`** - End-to-end: find best model → register → tag → alias → promote
+| Prompt | Description |
+|---|---|
+| `compare_runs_by_ids` | Compare specific runs side-by-side |
+| `find_best_run` | Find and analyze the best run in an experiment by metric |
+| `promote_best_model` | End-to-end: find best model → register → tag → alias → promote |
 
 ## Usage Examples
 
@@ -237,6 +257,26 @@ Built-in guided workflows available as slash commands:
 > "Find the best model in 'fraud-detection' by test/recall, register it as 'fraud-classifier', tag it with the framework and problem type, and set it as champion. Ask me before copying to prod."
 
 *(This maps directly to the `promote_best_model` built-in prompt)*
+
+## Debugging
+
+Use [MCP Inspector](https://github.com/modelcontextprotocol/inspector) to browse tools, call them with custom inputs, and inspect raw responses — without involving an LLM.
+
+**Published package:**
+```bash
+npx @modelcontextprotocol/inspector uvx mlflow-mcp
+```
+
+**Local source:**
+```bash
+npx @modelcontextprotocol/inspector uv run --project /path/to/mlflow-mcp mlflow-mcp
+```
+
+Set `MLFLOW_TRACKING_URI` in the Inspector's environment panel, or pass it inline:
+
+```bash
+MLFLOW_TRACKING_URI=http://127.0.0.1:5000 npx @modelcontextprotocol/inspector uvx mlflow-mcp
+```
 
 ## Requirements
 
