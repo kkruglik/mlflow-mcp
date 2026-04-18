@@ -807,7 +807,7 @@ def get_logged_model(model_id: str) -> dict:
         raise
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False))
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False))
 def register_model(
     model_name: str,
     model_uri: str,
@@ -989,7 +989,7 @@ def transition_model_version_stage(
         raise
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True))
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False))
 def copy_model_version(
     src_model_name: str, src_version: str, dst_model_name: str
 ) -> dict:

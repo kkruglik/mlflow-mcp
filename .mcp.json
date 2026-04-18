@@ -10,7 +10,7 @@
     "_mlflow-dev": {
       "_comment": "Use this instead of 'mlflow' above when developing from source. Swap the key to 'mlflow' and remove the published entry.",
       "command": "uv",
-      "args": ["run", "--project", "/Users/kirillkruglikov/repos/mlflow-mcp", "mlflow-mcp"],
+      "args": ["run", "--project", "/path/to/mlflow-mcp", "mlflow-mcp"],
       "env": {
         "MLFLOW_TRACKING_URI": "http://127.0.0.1:5000"
       }
