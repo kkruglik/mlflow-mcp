@@ -163,9 +163,12 @@ def get_runs(
 ) -> list[dict]:
     """Get runs for a specific experiment with full details.
 
+    Each run contains full metrics, params, and tags — keep limit small (3-10)
+    to avoid flooding context. Use offset to paginate.
+
     Args:
         experiment_id: The experiment ID
-        limit: Maximum number of runs to return
+        limit: Maximum number of runs to return. Keep small — each run is large.
         offset: Number of runs to skip
         order_by: List of sort clauses, e.g. ['metrics.rmse DESC', 'params.lr ASC'].
                   Use backticks for special characters: ['metrics.`trading/loss` DESC']
@@ -209,7 +212,7 @@ def get_runs(
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def get_run(run_id: str) -> dict:
-    """Get detailed information about a specific run"""
+    """Get detailed information about a specific run. Run data can be large — avoid fetching many runs at once."""
     logger.info(f"Fetching run details: {run_id}")
     try:
         client = MlflowClient()
@@ -272,6 +275,8 @@ def query_runs(
 ) -> list[dict]:
     """Query runs using MLflow's filter syntax with optional sorting.
 
+    Runs can be large. Use wise limits to avoid flooding context.
+
     Args:
         experiment_id: The experiment ID
         query: MLflow filter string (e.g., 'metrics.accuracy > 0.9')
@@ -329,6 +334,7 @@ def get_run_artifacts(run_id: str, path: str = "") -> list[dict]:
         )
         return [
             {
+                "run_id": run_id,
                 "path": artifact.path,
                 "is_dir": artifact.is_dir,
                 "file_size": artifact.file_size,
@@ -341,14 +347,20 @@ def get_run_artifacts(run_id: str, path: str = "") -> list[dict]:
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
-def get_run_artifact(run_id: str, artifact_path: str) -> str:
+def get_run_artifact(run_id: str, artifact_path: str) -> dict:
     """Download and return the local path to a specific artifact"""
     logger.info(f"Downloading artifact {artifact_path} from run {run_id}")
     try:
         client = MlflowClient()
         local_path = client.download_artifacts(run_id, artifact_path)
-        logger.info(f"Artifact downloaded to: {local_path}")
-        return local_path
+        size_bytes = os.path.getsize(local_path)
+        logger.info(f"Artifact downloaded to: {local_path} ({size_bytes} bytes)")
+        return {
+            "local_path": local_path,
+            "run_id": run_id,
+            "artifact_path": artifact_path,
+            "size_bytes": size_bytes,
+        }
     except Exception as e:
         logger.error(
             f"Error downloading artifact {artifact_path} from run {run_id}: {e}"
@@ -440,7 +452,7 @@ def get_best_run(experiment_id: str, metric: str, ascending: bool = False) -> di
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def compare_runs(experiment_id: str, run_ids: list[str]) -> dict:
-    """Compare runs side-by-side with full metrics and params. Use get_run() for individual run details."""
+    """Compare runs side-by-side with full metrics and params. Runs can be large — keep the list short."""
     logger.info(f"Comparing {len(run_ids)} runs in experiment {experiment_id}")
     try:
         client = MlflowClient()
@@ -572,7 +584,7 @@ def get_model_version(model_name: str, version: str) -> dict:
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def get_registered_model(name: str) -> dict:
-    """Get full details of a registered model including all versions and aliases.
+    """Get full details of a registered model including all versions and aliases. Can be large for models with many versions.
 
     Args:
         name: Name of the registered model.
@@ -673,7 +685,7 @@ def get_latest_versions(name: str, stages: list[str] | None = None) -> list[dict
 def search_runs_by_tags(
     experiment_id: str, tags: dict, limit: int = 3, offset: int = 0
 ) -> list[dict]:
-    """Find runs with specific tags (e.g., {'team': 'nlp', 'production': 'true'})."""
+    """Find runs with specific tags (e.g., {'team': 'nlp', 'production': 'true'}). Runs can be large — use wise limits."""
     logger.info(
         f"Searching runs by tags in experiment {experiment_id}: {tags} (limit={limit}, offset={offset})"
     )
@@ -740,7 +752,7 @@ def search_logged_models(
     datasets: list[dict[str, Any]] | None = None,
     order_by: list[dict[str, Any]] | None = None,
 ) -> list[dict]:
-    """Search for logged models across one or more experiments.
+    """Search for logged models across one or more experiments. Results can be large — use wise limits.
 
     Args:
         experiment_ids: List of experiment IDs to search in (at least one required).
