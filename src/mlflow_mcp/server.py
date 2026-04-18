@@ -4,6 +4,7 @@ from typing import Any
 
 import mlflow
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 from mlflow.tracking import MlflowClient
 
 from mlflow_mcp.helpers import serialize_logged_model
@@ -19,14 +20,18 @@ if not MLFLOW_TRACKING_URI:
     exit(1)
 
 
-mcp = FastMCP("mlflow")
+mcp = FastMCP(
+    "mlflow",
+    version="0.2.1",
+    description="MLflow MCP server — experiment tracking, model registry, and promotion workflows",
+)
 
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 
 logger.info(f"MLflow MCP server initialized with tracking URI: {MLFLOW_TRACKING_URI}")
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def get_experiments() -> list[dict]:
     """Get all experiments"""
     logger.info("Fetching all experiments")
@@ -40,7 +45,7 @@ def get_experiments() -> list[dict]:
         raise
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def search_experiments(
     filter_string: str | None = None,
     order_by: list[str] | None = None,
@@ -86,7 +91,7 @@ def search_experiments(
         raise
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def get_experiment_by_name(name: str) -> dict:
     """Get experiment details by name (more convenient than ID)"""
     logger.info(f"Fetching experiment by name: {name}")
@@ -111,7 +116,7 @@ def get_experiment_by_name(name: str) -> dict:
         raise
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def get_experiment_metrics(experiment_id: str) -> list[str]:
     """Get all unique metric names used across all runs in an experiment"""
     logger.info(f"Fetching metrics for experiment: {experiment_id}")
@@ -130,7 +135,7 @@ def get_experiment_metrics(experiment_id: str) -> list[str]:
         raise
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def get_experiment_params(experiment_id: str) -> list[str]:
     """Get all unique parameter names used across all runs in an experiment"""
     logger.info(f"Fetching params for experiment: {experiment_id}")
@@ -149,9 +154,12 @@ def get_experiment_params(experiment_id: str) -> list[str]:
         raise
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def get_runs(
-    experiment_id: str, limit: int = 3, offset: int = 0, order_by: str = None
+    experiment_id: str,
+    limit: int = 3,
+    offset: int = 0,
+    order_by: list[str] | None = None,
 ) -> list[dict]:
     """Get runs for a specific experiment with full details.
 
@@ -159,12 +167,12 @@ def get_runs(
         experiment_id: The experiment ID
         limit: Maximum number of runs to return
         offset: Number of runs to skip
-        order_by: Column to order by (e.g., 'metrics.rmse DESC', 'params.lr ASC')
-                  Use backticks for special characters: 'metrics.`trading/loss` DESC'
+        order_by: List of sort clauses, e.g. ['metrics.rmse DESC', 'params.lr ASC'].
+                  Use backticks for special characters: ['metrics.`trading/loss` DESC']
 
     Examples:
         get_runs("1", limit=5)
-        get_runs("1", order_by="metrics.accuracy DESC")
+        get_runs("1", order_by=["metrics.accuracy DESC"])
     """
     logger.info(
         f"Fetching runs for experiment {experiment_id} (limit={limit}, offset={offset}, order_by={order_by})"
@@ -174,7 +182,7 @@ def get_runs(
         # Fetch offset + limit results, then slice
         runs = client.search_runs(
             experiment_ids=[experiment_id],
-            order_by=[order_by] if order_by else None,
+            order_by=order_by,
             max_results=offset + limit,
         )
         # Apply offset
@@ -199,7 +207,7 @@ def get_runs(
         raise
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def get_run(run_id: str) -> dict:
     """Get detailed information about a specific run"""
     logger.info(f"Fetching run details: {run_id}")
@@ -224,7 +232,7 @@ def get_run(run_id: str) -> dict:
         raise
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def get_parent_run(run_id: str) -> dict | None:
     """Get the parent run of a nested run. Returns None if the run has no parent.
 
@@ -254,13 +262,13 @@ def get_parent_run(run_id: str) -> dict | None:
         raise
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def query_runs(
     experiment_id: str,
     query: str,
     limit: int = 3,
     offset: int = 0,
-    order_by: str = None,
+    order_by: list[str] | None = None,
 ) -> list[dict]:
     """Query runs using MLflow's filter syntax with optional sorting.
 
@@ -269,12 +277,12 @@ def query_runs(
         query: MLflow filter string (e.g., 'metrics.accuracy > 0.9')
         limit: Maximum number of runs to return
         offset: Number of runs to skip
-        order_by: Column to order by (e.g., 'metrics.rmse DESC', 'params.lr ASC')
-                  Use backticks for special characters: 'metrics.`trading/loss` DESC'
+        order_by: List of sort clauses, e.g. ['metrics.rmse DESC', 'params.lr ASC'].
+                  Use backticks for special characters: ['metrics.`trading/loss` DESC']
 
     Examples:
-        query_runs("1", "metrics.accuracy > 0", order_by="metrics.accuracy DESC")
-        query_runs("1", "", order_by="metrics.`f1/score` DESC")
+        query_runs("1", "metrics.accuracy > 0", order_by=["metrics.accuracy DESC"])
+        query_runs("1", "", order_by=["metrics.`f1/score` DESC"])
     """
     logger.info(
         f"Querying runs in experiment {experiment_id} with filter: {query} "
@@ -286,7 +294,7 @@ def query_runs(
         runs = client.search_runs(
             experiment_ids=[experiment_id],
             filter_string=query,
-            order_by=[order_by] if order_by else None,
+            order_by=order_by,
             max_results=offset + limit,
         )
 
@@ -309,7 +317,7 @@ def query_runs(
         raise
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def get_run_artifacts(run_id: str, path: str = "") -> list[dict]:
     """List artifacts for a specific run. Use 'path' to browse into directories (e.g., 'configs')"""
     logger.info(f"Listing artifacts for run: {run_id} (path: '{path}')")
@@ -332,7 +340,7 @@ def get_run_artifacts(run_id: str, path: str = "") -> list[dict]:
         raise
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def get_run_artifact(run_id: str, artifact_path: str) -> str:
     """Download and return the local path to a specific artifact"""
     logger.info(f"Downloading artifact {artifact_path} from run {run_id}")
@@ -348,7 +356,7 @@ def get_run_artifact(run_id: str, artifact_path: str) -> str:
         raise
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def get_run_metrics(run_id: str) -> dict:
     """Get all metrics for a specific run with their latest values"""
     logger.info(f"Fetching metrics for run: {run_id}")
@@ -362,7 +370,7 @@ def get_run_metrics(run_id: str) -> dict:
         raise
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def get_run_metric(run_id: str, metric_name: str) -> list[dict]:
     """Get the full history of a specific metric for a run"""
     logger.info(f"Fetching metric history for {metric_name} in run {run_id}")
@@ -387,7 +395,7 @@ def get_run_metric(run_id: str, metric_name: str) -> list[dict]:
         raise
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def get_best_run(experiment_id: str, metric: str, ascending: bool = False) -> dict:
     """Get the best run by a specific metric (e.g., highest accuracy, lowest loss). Works with metrics containing special characters like '/' (e.g., 'trading/total_profit')"""
     direction = "lowest" if ascending else "highest"
@@ -430,7 +438,7 @@ def get_best_run(experiment_id: str, metric: str, ascending: bool = False) -> di
         raise
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def compare_runs(experiment_id: str, run_ids: list[str]) -> dict:
     """Compare runs side-by-side with full metrics and params. Use get_run() for individual run details."""
     logger.info(f"Comparing {len(run_ids)} runs in experiment {experiment_id}")
@@ -471,7 +479,7 @@ def compare_runs(experiment_id: str, run_ids: list[str]) -> dict:
         raise
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def get_registered_models() -> list[dict]:
     """List all registered models in the model registry"""
     logger.info("Fetching all registered models")
@@ -495,7 +503,7 @@ def get_registered_models() -> list[dict]:
         raise
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def get_model_versions(model_name: str) -> list[dict]:
     """Get all versions of a registered model"""
     logger.info(f"Fetching versions for model: {model_name}")
@@ -523,7 +531,7 @@ def get_model_versions(model_name: str) -> list[dict]:
         raise
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def get_model_version(model_name: str, version: str) -> dict:
     """Get specific model version details (metrics, stage, run_id)"""
     logger.info(f"Fetching model version: {model_name} v{version}")
@@ -562,7 +570,7 @@ def get_model_version(model_name: str, version: str) -> dict:
         raise
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def get_registered_model(name: str) -> dict:
     """Get full details of a registered model including all versions and aliases.
 
@@ -597,7 +605,7 @@ def get_registered_model(name: str) -> dict:
         raise
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def get_model_version_by_alias(name: str, alias: str) -> dict:
     """Get a model version by its alias (e.g. 'champion', 'production').
 
@@ -628,7 +636,7 @@ def get_model_version_by_alias(name: str, alias: str) -> dict:
         raise
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def get_latest_versions(name: str, stages: list[str] | None = None) -> list[dict]:
     """Get latest model versions for each stage (e.g. 'Staging', 'Production').
 
@@ -661,7 +669,7 @@ def get_latest_versions(name: str, stages: list[str] | None = None) -> list[dict
         raise
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def search_runs_by_tags(
     experiment_id: str, tags: dict, limit: int = 3, offset: int = 0
 ) -> list[dict]:
@@ -704,7 +712,7 @@ def search_runs_by_tags(
         raise
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def get_artifact_content(run_id: str, artifact_path: str) -> str:
     """Read and return artifact content (for text/json files)"""
     logger.info(f"Reading artifact content: {artifact_path} from run {run_id}")
@@ -724,7 +732,7 @@ def get_artifact_content(run_id: str, artifact_path: str) -> str:
         raise
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def search_logged_models(
     experiment_ids: list[str],
     filter_string: str | None = None,
@@ -770,7 +778,7 @@ def search_logged_models(
         raise
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def get_logged_model(model_id: str) -> dict:
     """Get detailed information about a specific logged model by its ID.
 
@@ -788,7 +796,7 @@ def get_logged_model(model_id: str) -> dict:
         raise
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False))
 def register_model(
     model_name: str,
     model_uri: str,
@@ -823,8 +831,8 @@ def register_model(
         raise
 
 
-@mcp.tool()
-def set_registered_model_tag(name: str, key: str, value: str) -> None:
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True))
+def set_registered_model_tag(name: str, key: str, value: str) -> dict:
     """Set a tag on a registered model (e.g. problem_type, team, framework).
 
     Args:
@@ -837,13 +845,14 @@ def set_registered_model_tag(name: str, key: str, value: str) -> None:
         client = MlflowClient()
         client.set_registered_model_tag(name, key, value)
         logger.info(f"Tag {key}={value!r} set on registered model '{name}'")
+        return {"success": True, "name": name, "key": key, "value": value}
     except Exception as e:
         logger.error(f"Error setting tag {key} on registered model '{name}': {e}")
         raise
 
 
-@mcp.tool()
-def set_model_alias(name: str, alias: str, version: str) -> None:
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True))
+def set_model_alias(name: str, alias: str, version: str) -> dict:
     """Assign an alias to a specific model version (e.g. promote best model to 'champion').
 
     Args:
@@ -859,13 +868,14 @@ def set_model_alias(name: str, alias: str, version: str) -> None:
         client = MlflowClient()
         client.set_registered_model_alias(name, alias, version)
         logger.info(f"Alias '{alias}' set to {name} v{version}")
+        return {"success": True, "name": name, "alias": alias, "version": version}
     except Exception as e:
         logger.error(f"Error setting alias '{alias}' on {name} v{version}: {e}")
         raise
 
 
-@mcp.tool()
-def set_run_tag(run_id: str, key: str, value: str) -> None:
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True))
+def set_run_tag(run_id: str, key: str, value: str) -> dict:
     """Set a tag on a run (e.g. annotate best model, flag for review).
 
     Args:
@@ -878,13 +888,14 @@ def set_run_tag(run_id: str, key: str, value: str) -> None:
         client = MlflowClient()
         client.set_tag(run_id, key, value)
         logger.info(f"Tag {key}={value!r} set on run {run_id}")
+        return {"success": True, "run_id": run_id, "key": key, "value": value}
     except Exception as e:
         logger.error(f"Error setting tag {key} on run {run_id}: {e}")
         raise
 
 
-@mcp.tool()
-def set_experiment_tag(experiment_id: str, key: str, value: str) -> None:
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True))
+def set_experiment_tag(experiment_id: str, key: str, value: str) -> dict:
     """Set a tag on an experiment.
 
     Args:
@@ -897,12 +908,18 @@ def set_experiment_tag(experiment_id: str, key: str, value: str) -> None:
         client = MlflowClient()
         client.set_experiment_tag(experiment_id, key, value)
         logger.info(f"Tag {key}={value!r} set on experiment {experiment_id}")
+        return {
+            "success": True,
+            "experiment_id": experiment_id,
+            "key": key,
+            "value": value,
+        }
     except Exception as e:
         logger.error(f"Error setting tag {key} on experiment {experiment_id}: {e}")
         raise
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True))
 def update_model_version(name: str, version: str, description: str) -> dict:
     """Update the description of a model version.
 
@@ -928,7 +945,7 @@ def update_model_version(name: str, version: str, description: str) -> dict:
         raise
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True))
 def transition_model_version_stage(
     name: str, version: str, stage: str, archive_existing: bool = False
 ) -> dict:
@@ -961,7 +978,7 @@ def transition_model_version_stage(
         raise
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True))
 def copy_model_version(
     src_model_name: str, src_version: str, dst_model_name: str
 ) -> dict:
@@ -991,6 +1008,98 @@ def copy_model_version(
         }
     except Exception as e:
         logger.error(f"Error copying {src_model_uri} to {dst_model_name}: {e}")
+        raise
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True))
+def delete_model_alias(name: str, alias: str) -> dict:
+    """Remove an alias from a registered model (e.g. revoke 'champion'). The alias is permanently removed; the model version itself is not affected.
+
+    Args:
+        name: Name of the registered model.
+        alias: Alias to remove, e.g. 'champion', 'production'.
+    """
+    logger.info(f"Deleting alias '{alias}' from model '{name}'")
+    try:
+        client = MlflowClient()
+        client.delete_registered_model_alias(name, alias)
+        logger.info(f"Alias '{alias}' removed from model '{name}'")
+        return {"success": True, "name": name, "alias": alias}
+    except Exception as e:
+        logger.error(f"Error deleting alias '{alias}' from model '{name}': {e}")
+        raise
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True))
+def delete_model_version(name: str, version: str) -> dict:
+    """Delete a specific model version from the registry. Irreversible — the version and its metadata cannot be recovered.
+
+    Args:
+        name: Name of the registered model.
+        version: Version number to delete.
+    """
+    logger.info(f"Deleting model version {name} v{version}")
+    try:
+        client = MlflowClient()
+        client.delete_model_version(name, version)
+        logger.info(f"Deleted model version {name} v{version}")
+        return {"success": True, "name": name, "version": version}
+    except Exception as e:
+        logger.error(f"Error deleting model version {name} v{version}: {e}")
+        raise
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True))
+def delete_registered_model(name: str) -> dict:
+    """Delete an entire registered model and all its versions. Irreversible — all versions, aliases, and tags are permanently removed.
+
+    Args:
+        name: Name of the registered model to delete.
+    """
+    logger.info(f"Deleting registered model '{name}'")
+    try:
+        client = MlflowClient()
+        client.delete_registered_model(name)
+        logger.info(f"Deleted registered model '{name}'")
+        return {"success": True, "name": name}
+    except Exception as e:
+        logger.error(f"Error deleting registered model '{name}': {e}")
+        raise
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True))
+def delete_run(run_id: str) -> dict:
+    """Delete a run. Moves it to the 'deleted' lifecycle stage — not shown in UI or queries, but recoverable via the MLflow API.
+
+    Args:
+        run_id: The run ID to delete.
+    """
+    logger.info(f"Deleting run {run_id}")
+    try:
+        client = MlflowClient()
+        client.delete_run(run_id)
+        logger.info(f"Deleted run {run_id}")
+        return {"success": True, "run_id": run_id}
+    except Exception as e:
+        logger.error(f"Error deleting run {run_id}: {e}")
+        raise
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True))
+def delete_experiment(experiment_id: str) -> dict:
+    """Delete an experiment and all its runs. Moves to the 'deleted' lifecycle stage — not shown in UI or queries, but recoverable via the MLflow API.
+
+    Args:
+        experiment_id: The experiment ID to delete.
+    """
+    logger.info(f"Deleting experiment {experiment_id}")
+    try:
+        client = MlflowClient()
+        client.delete_experiment(experiment_id)
+        logger.info(f"Deleted experiment {experiment_id}")
+        return {"success": True, "experiment_id": experiment_id}
+    except Exception as e:
+        logger.error(f"Error deleting experiment {experiment_id}: {e}")
         raise
 
 
@@ -1041,7 +1150,7 @@ Ask the user if they want to copy it to a separate production model entry.
 Summarize what was done."""
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def health() -> dict:
     """Check MLflow server health and connectivity"""
     logger.info(f"Checking MLflow server health at {MLFLOW_TRACKING_URI}")
