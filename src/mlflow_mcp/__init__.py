@@ -1,3 +1,3 @@
 """MLflow MCP Server - A Model Context Protocol server for MLflow."""
 
-__version__ = "0.1.7"
+__version__ = "0.4.0"

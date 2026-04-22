@@ -134,6 +134,7 @@ For Databricks or token-based auth, use `MLFLOW_TRACKING_TOKEN` instead:
 | `get_experiment_by_name(name)` | Get experiment by name |
 | `get_experiment_metrics(experiment_id)` | Discover all unique metric keys |
 | `get_experiment_params(experiment_id)` | Discover all unique parameter keys |
+| `get_experiment_tags(experiment_id)` | Discover all unique tag keys used across runs |
 | `set_experiment_tag(experiment_id, key, value)` | Tag an experiment |
 | `delete_experiment(experiment_id)` | Delete an experiment (moves to deleted stage) |
 
@@ -142,7 +143,7 @@ For Databricks or token-based auth, use `MLFLOW_TRACKING_TOKEN` instead:
 | Tool | Description |
 |---|---|
 | `get_runs(experiment_id, limit, offset, order_by)` | List runs with full details, sorting and pagination |
-| `get_run(run_id)` | Get detailed run information |
+| `get_run(run_id)` | Get detailed run information including metrics, params, tags, artifact URI, and dataset inputs |
 | `get_parent_run(run_id)` | Get parent run for nested runs |
 | `query_runs(experiment_id, query, limit, offset, order_by)` | Filter runs, e.g. `"metrics.accuracy > 0.9"` |
 | `search_runs_by_tags(experiment_id, tags, limit, offset)` | Find runs by tag key/value |
@@ -213,6 +214,7 @@ Built-in guided workflows available as slash commands in Claude:
 | `compare_runs_by_ids` | Compare specific runs side-by-side |
 | `find_best_run` | Find and analyze the best run in an experiment by metric |
 | `promote_best_model` | End-to-end: find best model → register → tag → alias → promote |
+| `audit_mlflow_setup` | Audit the MLflow setup against industry best practices — scores 7 categories 1–10 and produces a prioritized improvement roadmap |
 
 ## Usage Examples
 
@@ -251,6 +253,35 @@ Built-in guided workflows available as slash commands in Claude:
 > "Update the description of fraud-classifier v3 to explain what dataset it was trained on."
 
 > "Copy fraud-classifier v3 to a separate 'fraud-classifier-prod' model as the production entry."
+
+### Audit your MLflow setup
+
+> "Audit my MLflow setup"
+
+*(Triggers the `audit_mlflow_setup` built-in prompt — Claude explores experiments, runs, artifacts, and the model registry, then scores each area against Google/Databricks best practices)*
+
+<details>
+<summary>Example output</summary>
+
+```
+| Category             | Score  | Top Issue                                      |
+|----------------------|--------|------------------------------------------------|
+| Experiment Org       |  5/10  | Flat namespace, no dot-notation hierarchy      |
+| Parameter Logging    |  7/10  | No parent-child nesting for tuning sweeps      |
+| Metric Logging       |  6/10  | Only final values logged, no training curves   |
+| Tagging Strategy     |  5/10  | Params duplicated as tags; stale test_tag      |
+| Artifact Management  |  2/10  | No log_model(); artifacts on local disk        |
+| Model Registry       |  3/10  | Duplicate prod models instead of aliases       |
+| Reproducibility      |  3/10  | No git SHA; no mlflow.log_input() datasets     |
+| Mean Score           |  4.4/10|                                                |
+
+Top 3 improvements:
+1. Call log_model() and move artifact store to S3/GCS
+2. Add git SHA tag + mlflow.log_input() for dataset tracking
+3. Consolidate registry to one model entry with @champion alias
+```
+
+</details>
 
 ### End-to-end promotion workflow
 

@@ -154,6 +154,25 @@ def get_experiment_params(experiment_id: str) -> list[str]:
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+def get_experiment_tags(experiment_id: str) -> list[str]:
+    """Get all unique tag keys used across all runs in an experiment"""
+    logger.info(f"Fetching tags for experiment: {experiment_id}")
+    try:
+        client = MlflowClient()
+        runs = client.search_runs(experiment_ids=[experiment_id], max_results=1000)
+
+        tag_keys = set()
+        for run in runs:
+            tag_keys.update(run.data.tags.keys())
+
+        logger.info(f"Found {len(tag_keys)} unique tag keys across {len(runs)} runs")
+        return sorted(list(tag_keys))
+    except Exception as e:
+        logger.error(f"Error fetching tags for experiment {experiment_id}: {e}")
+        raise
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def get_runs(
     experiment_id: str,
     limit: int = 3,
@@ -228,6 +247,15 @@ def get_run(run_id: str) -> dict:
             "metrics": run.data.metrics,
             "params": run.data.params,
             "tags": run.data.tags,
+            "inputs": [
+                {
+                    "name": di.dataset.name,
+                    "digest": di.dataset.digest,
+                    "source_type": di.dataset.source_type,
+                    "tags": {t.key: t.value for t in di.tags},
+                }
+                for di in (run.inputs.dataset_inputs or [])
+            ],
         }
     except Exception as e:
         logger.error(f"Error fetching run {run_id}: {e}")
@@ -1159,6 +1187,120 @@ Add relevant model-level tags (problem_type, framework, asset). Tag the source r
 Assign the "champion" alias to the new version.
 Ask the user if they want to copy it to a separate production model entry.
 Summarize what was done."""
+
+
+_AUDIT_PROMPT = """You are a senior MLOps consultant auditing this MLflow deployment against Google/Databricks industry best practices.
+
+<instructions>
+  <step name="gather_data">
+    Call tools in this order to collect evidence before evaluating anything.
+
+    1. get_experiments() — list all experiments; note names, count, naming patterns
+    2. For up to 3 representative experiments:
+       - get_experiment_metrics(experiment_id)
+       - get_experiment_params(experiment_id)
+       - get_experiment_tags(experiment_id)
+       - get_runs(experiment_id, limit=5)
+    3. For up to 3 individual runs sampled above:
+       - get_run(run_id) — inspect params, metrics, tags, artifact_uri, inputs
+       - get_run_artifacts(run_id) — inspect artifact structure and file names
+    4. get_registered_models()
+    5. For up to 2 registered models:
+       - get_registered_model(name) — check aliases
+       - get_model_versions(name) — check versioning, descriptions, stages
+
+    <note>If the instance has very few runs, treat missing data as "unknown" not "bad". Score only what you can observe.</note>
+  </step>
+
+  <step name="evaluate">
+    Score each category 1–10 and fill in the structured blocks below.
+
+    <category name="experiment_organization">
+      <best_practice>Hierarchical dot-notation names (team.project.task); consistent convention; no generic names like "test", "Default", "my_experiment"; searchable by business context.</best_practice>
+      <whats_good></whats_good>
+      <whats_bad></whats_bad>
+      <what_to_improve></what_to_improve>
+      <score>X/10</score>
+    </category>
+
+    <category name="parameter_logging">
+      <best_practice>All hyperparameters logged at run start via log_params(); descriptive names ("learning_rate" not "lr"); parent-child run structure for tuning sweeps.</best_practice>
+      <whats_good></whats_good>
+      <whats_bad></whats_bad>
+      <what_to_improve></what_to_improve>
+      <score>X/10</score>
+    </category>
+
+    <category name="metric_logging">
+      <best_practice>train/val/test metrics logged separately with consistent prefixes; per-step logging for training progression (not just final values); business metrics alongside technical ones; no mixed naming ("acc" vs "accuracy").</best_practice>
+      <whats_good></whats_good>
+      <whats_bad></whats_bad>
+      <what_to_improve></what_to_improve>
+      <score>X/10</score>
+    </category>
+
+    <category name="tagging_strategy">
+      <best_practice>Tags = mutable categorical metadata for filtering (env, model_type, dataset_version, team); params = immutable training config; never store hyperparameters as tags; consistent naming convention.</best_practice>
+      <whats_good></whats_good>
+      <whats_bad></whats_bad>
+      <what_to_improve></what_to_improve>
+      <score>X/10</score>
+    </category>
+
+    <category name="artifact_management">
+      <best_practice>log_model() not just log_artifact(); artifact_uri points to cloud storage (s3://, gs://) or uses the MLflow proxy (mlflow-artifacts:/) backed by cloud — not bare file:// local paths in production; model cards, feature schemas, validation results included; organized paths (model/, data/, results/).</best_practice>
+      <whats_good></whats_good>
+      <whats_bad></whats_bad>
+      <what_to_improve></what_to_improve>
+      <score>X/10</score>
+    </category>
+
+    <category name="model_registry">
+      <best_practice>Descriptive model names (churn_xgboost, not model1); version descriptions capture key differences; aliases used (champion, production) for routing; versions linked to source runs.</best_practice>
+      <whats_good></whats_good>
+      <whats_bad></whats_bad>
+      <what_to_improve></what_to_improve>
+      <score>X/10</score>
+    </category>
+
+    <category name="reproducibility">
+      <best_practice>Git commit SHA in tags (mlflow.source.git.commit); random seeds logged as params; datasets tracked via mlflow.log_input() (visible in run inputs); dependency versions captured (requirements.txt in artifacts).</best_practice>
+      <whats_good></whats_good>
+      <whats_bad></whats_bad>
+      <what_to_improve></what_to_improve>
+      <score>X/10</score>
+    </category>
+  </step>
+
+  <step name="report">
+    Present a summary table:
+
+    | Category | Score | Top Issue |
+    |---|---|---|
+    | Experiment Organization | X/10 | … |
+    | Parameter Logging | X/10 | … |
+    | Metric Logging | X/10 | … |
+    | Tagging Strategy | X/10 | … |
+    | Artifact Management | X/10 | … |
+    | Model Registry | X/10 | … |
+    | Reproducibility | X/10 | … |
+    | **Mean Score** | **X.X/10** | |
+
+    Then list the 3 most impactful improvements with specific actionable steps.
+  </step>
+</instructions>
+"""
+
+
+@mcp.prompt()
+def audit_mlflow_setup() -> str:
+    """Audit the current MLflow setup against industry best practices.
+
+    Evaluates experiment organization, run logging quality, tagging strategy,
+    artifact management, model registry usage, production workflow, and reproducibility.
+    Each category is scored 1–10. Ends with a mean score and improvement roadmap.
+    """
+    return _AUDIT_PROMPT
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
