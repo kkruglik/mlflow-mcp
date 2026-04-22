@@ -48,4 +48,5 @@ packages = ["src/mlflow_mcp"]
 [dependency-groups]
 dev = [
     "bandit>=1.9.4",
+    "ruff>=0.15.10",
 ]
