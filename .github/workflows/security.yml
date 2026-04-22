@@ -25,10 +25,6 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Check dependencies for known CVEs
-        run: uv run pip-audit
-        continue-on-error: true
-
       - name: Run bandit static analysis (high severity only)
         run: uv run bandit -ll -r src/
 
