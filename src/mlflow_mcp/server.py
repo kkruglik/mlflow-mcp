@@ -1248,7 +1248,7 @@ _AUDIT_PROMPT = """You are a senior MLOps consultant auditing this MLflow deploy
     </category>
 
     <category name="artifact_management">
-      <best_practice>log_model() not just log_artifact(); artifact_uri points to cloud storage (s3://, gs://) not local paths in production; model cards, feature schemas, validation results included; organized paths (model/, data/, results/).</best_practice>
+      <best_practice>log_model() not just log_artifact(); artifact_uri points to cloud storage (s3://, gs://) or uses the MLflow proxy (mlflow-artifacts:/) backed by cloud — not bare file:// local paths in production; model cards, feature schemas, validation results included; organized paths (model/, data/, results/).</best_practice>
       <whats_good></whats_good>
       <whats_bad></whats_bad>
       <what_to_improve></what_to_improve>
