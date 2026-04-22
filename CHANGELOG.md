@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-04-22
+
+### Added
+- `get_experiment_tags(experiment_id)` — discover all unique tag keys used across runs in an experiment (completes the metrics/params/tags symmetrical trio)
+- `audit_mlflow_setup` prompt — evaluates an MLflow deployment against Google/Databricks best practices across 7 categories (experiment organization, parameter logging, metric logging, tagging strategy, artifact management, model registry, reproducibility); scores each 1–10 and produces a prioritized improvement roadmap with a mean score
+
+### Changed
+- `get_run()` now returns an `inputs` field containing dataset inputs logged via `mlflow.log_input()` (MLflow 3 dataset tracking)
+
 ## [0.3.0] - 2026-04-18
 
 ### Added
