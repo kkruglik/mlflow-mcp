@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-08-08
+
+### Changed
+- Pinned `mcp` dependency to `>=1.16.0,<2` — MCP Python SDK v2 (stable since 2026-07-27) removes the `mcp.server.fastmcp.FastMCP` import path this server relies on, so an unpinned install could resolve to a breaking major version
+
 ## [0.4.0] - 2026-04-22
 
 ### Added
