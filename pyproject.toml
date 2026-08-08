@@ -28,7 +28,7 @@ classifiers = [
   "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 
-dependencies = ["mcp>=1.16.0", "mlflow>=3.4.0"]
+dependencies = ["mcp>=1.16.0,<2", "mlflow>=3.4.0"]
 
 [project.urls]
 Homepage = "https://github.com/kkruglik/mlflow-mcp"
